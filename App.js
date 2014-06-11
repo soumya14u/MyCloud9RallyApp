@@ -6,6 +6,8 @@ Ext.define('CustomApp', {
     
     launch: function(){
         console.log("Hello World!!");
+        console.log("Testing for Git commit");
+        
         this._loadData();
     },
     
