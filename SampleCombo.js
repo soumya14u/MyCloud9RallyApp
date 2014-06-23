@@ -20,12 +20,12 @@ Ext.define('CustomApp', {
         });
         this.add(this.topContainer);
         
-        this._loadIndustryEpicData();
+        this._loadIndustryEpicDataStore();
         
     },
     
     
-    _loadIndustryEpicData: function(){
+    _loadIndustryEpicDataStore: function(){
             
             // If the store exists, just reload data
             if(this.industryEpicStore){
@@ -45,7 +45,7 @@ Ext.define('CustomApp', {
                     },
                     listeners: {
                         load: function(myStore, data, success) {
-                             this._loadEpicComboData();
+                             this._loadEpicComboBox();
                         },
                         scope:this
                     },
@@ -60,7 +60,7 @@ Ext.define('CustomApp', {
             
         },
         
-        _loadEpicComboData: function(){
+        _loadEpicComboBox: function(){
             if(this.industryEpicStore)
             {
                 //get all the epic data for populating combobox.
@@ -78,8 +78,8 @@ Ext.define('CustomApp', {
                         valueField: 'ID',
                         width: 600,
                         listeners: {
-                            select: this._onEpicComboSelect,
-                            ready: this._onEpicComboLoad, //need to revisit why this is not firing
+                            select: this._onEpicComboBoxSelect,
+                            ready: this._onEpicComboBoxLoad, //need to revisit why this is not firing
                             scope: this
             			}
                     });
@@ -90,11 +90,11 @@ Ext.define('CustomApp', {
             }
         },
         
-        _onEpicComboLoad: function(){
+        _onEpicComboBoxLoad: function(){
             //required future implementation.
         },
         
-        _onEpicComboSelect: function(){
+        _onEpicComboBoxSelect: function(){
             
             //retrive all epic info for selected item.
             this.selectedIndustryEpicID = this.down('#industryEpicCombobox').getValue();
