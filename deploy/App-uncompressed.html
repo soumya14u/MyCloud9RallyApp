@@ -17,22 +17,100 @@
     epicComboStore : undefined,             //store all data to be displayed in Epic Combo.
     selectedIndustryEpicID: undefined,      //contains selected Industry Epic ID
     selectedIndustryEpicData: undefined,    //contains selected Industry Epic data
+    epicCheckBoxChecked: false,             //captures the current check box checked value.
+    filteredEpicDataForCombo: undefined,    //contains all the filtered epics for combo.
     
     launch: function() {
         //setting up the container for control layout.
-        this.topContainer = Ext.create('Ext.container.Container',{
+        this.globalContainer = Ext.create('Ext.container.Container',{
             layout: {
                 type: 'vbox',
                 align: 'left',
                 padding: 10
             }
         });
-        this.add(this.topContainer);
+        this.add(this.globalContainer);
         
+        this.topContainer = Ext.create('Ext.container.Container',{
+            layout: {
+                type: 'hbox',
+                align: 'left',
+                padding: 10
+            }
+        });
+        this.globalContainer.add(this.topContainer);
+        
+        this.middleContainer = Ext.create('Ext.container.Container',{
+            layout: {
+                type: 'vbox',
+                align: 'left',
+                padding: 10
+            }
+        });
+        this.globalContainer.add(this.middleContainer);
+        
+         this.comboBoxContainer = Ext.create('Ext.container.Container',{
+            layout: {
+                type: 'hbox',
+                align: 'left',
+                padding: 5
+            }
+        });
+        this.topContainer.add(this.comboBoxContainer);
+        
+        this.filterContainer = Ext.create('Ext.container.Container',{
+            layout: {
+                type: 'hbox',
+                align: 'left',
+                padding: 5
+            }
+        });
+        this.topContainer.add(this.filterContainer);
+        
+        this._loadEpicFilterControl();
         this._loadIndustryEpicDataStore();
-        
     },
     
+    _loadEpicFilterControl: function(){
+        console.log('adding check box control.');
+        this.epicFilter = Ext.create( 'Ext.form.field.Checkbox', {
+                renderTo: Ext.getBody(),
+                id: 'industryEpicFilterCheck',
+                boxLabel: 'Exclude all "No Entry" or "Launched" Epics. ', 
+                name: 'epicFilterCheckBox', 
+                inputValue: 'PortfolioItems/Epic ', 
+                checked: false,
+                width: 250,
+                listerners:{
+                    change: function(){
+                        console.log('checkbox check change event is fired!')
+                    },
+                    click: function(){
+                        console.log('ckeckbox clicked event is fired.!');
+                    },
+                    scope: this
+                }
+            });
+            
+        this.epicFilterButton = Ext.create('Rally.ui.Button',{
+            text: 'Filter',
+            renderTo: Ext.getBody(),
+            handler: this._epicFilterButtonClicked,
+            scope: this
+        });
+        
+        //add the check box control to the app container.
+        this.filterContainer.add(this.epicFilter);
+        this.filterContainer.add(this.epicFilterButton);
+    },
+    
+    _epicFilterButtonClicked: function(){
+        
+        console.log('Filter Button is clicked!');
+        this.epicCheckBoxChecked = this.down('#industryEpicFilterCheck').getValue();
+        console.log('The checked value is?', this.epicCheckBoxChecked);
+        this._loadIndustryEpicDataStore();
+    },
     
     _loadIndustryEpicDataStore: function(){
             
@@ -72,11 +150,27 @@
         _loadEpicComboBox: function(){
             if(this.industryEpicStore)
             {
+                //prepare the filtered Epic Data.
+                this._createFilteredEpicData();
+                
                 //get all the epic data for populating combobox.
-                this._createAllEpicComboStore(this.industryEpicStore.getRecords());
+                this._createAllEpicComboStore();
                 
                 if(this.epicComboStore)
                 {
+                    if(this.epicDetailPanel)
+                    {
+                        console.log('update existing panel blank.');
+                        this.epicDetailPanel.getForm().findField('name').setValue('');
+                        this.epicDetailPanel.getForm().findField('owner').setValue('');
+                        this.epicDetailPanel.getForm().findField('refined_estimate').setValue('');
+                        this.epicDetailPanel.getForm().findField('target_launch').setValue('');
+                    }
+                    
+                    //if the combo selectorexists. dispose it off.
+                    if(this.epicSelector)
+                        this.epicSelector.destroy();
+                        
                     //create the combo dropdown list control.
                     this.epicSelector = Ext.create('Ext.form.ComboBox',{
                         fieldLabel:'Select Epics: ',
@@ -94,13 +188,43 @@
                     });
                     
                     //add the combo box control to the app container.
-                    this.topContainer.add(this.epicSelector);
+                    this.comboBoxContainer.add(this.epicSelector);
                 }
             }
         },
         
+        _createFilteredEpicData: function(){
+            this.filteredEpicDataForCombo = [];
+            
+            if(this.epicCheckBoxChecked)
+            {
+                var epicDataCol = [];
+                //fetch the epic data for Combo list.
+                Ext.Array.each(this.industryEpicStore.getRecords(),function(thisIndustryEpic){
+                    var epicState = thisIndustryEpic.get('State');
+                    if(epicState!==null)
+                    {
+                        var epicStateName = epicState.Name;
+                        if(epicStateName!==null && epicStateName !== 'Launched')
+                            epicDataCol.push(thisIndustryEpic);
+                    }
+                });
+                
+                this.filteredEpicDataForCombo = epicDataCol;
+            }
+            else
+                this.filteredEpicDataForCombo = this.industryEpicStore.getRecords();
+            
+        },
+        
+        _onEpicFilterClick:function(){
+            console.log('checkbox event fired!!!');
+            var checkFilter = this.down('#industryEpicFilterCheck').getValue();
+            console.log('Checked Current Value', checkFilter);
+        },
+        
         _onEpicComboBoxLoad: function(){
-            //required future implementation.
+            console.log('On combo box load....');
         },
         
         _onEpicComboBoxSelect: function(){
@@ -187,14 +311,14 @@
                     });
                     
                     //add the panel to the container.
-                    this.topContainer.add(this.epicDetailPanel);
+                    this.middleContainer.add(this.epicDetailPanel);
                 }
             }
         },
         
         _createAllEpicComboStore: function(){
             
-            if(this.industryEpicStore)
+            if(this.filteredEpicDataForCombo)
             {
                 //define the custom model for combo box data.
                 Ext.define('Epic', {
@@ -208,7 +332,7 @@
                 //fetch the epic data for Combo list.
                 var epicDataCol = [];
                         
-                Ext.Array.each(this.industryEpicStore.getRecords(),function(thisIndustryEpic){
+                Ext.Array.each(this.filteredEpicDataForCombo,function(thisIndustryEpic){
                     var epicName = thisIndustryEpic.get('Name');
                     var epicId = thisIndustryEpic.get('FormattedID');
                     var epicComboName = epicId + ': ' + epicName;
