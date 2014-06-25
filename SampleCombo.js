@@ -151,7 +151,6 @@ Ext.define('CustomApp', {
                 {
                     if(this.epicDetailPanel)
                     {
-                        console.log('update existing panel blank.');
                         this.epicDetailPanel.getForm().findField('name').setValue('');
                         this.epicDetailPanel.getForm().findField('owner').setValue('');
                         this.epicDetailPanel.getForm().findField('refined_estimate').setValue('');
@@ -232,7 +231,6 @@ Ext.define('CustomApp', {
                 var records = this.industryEpicStore.getRecords();
                 var index = this.industryEpicStore.find('FormattedID', this.selectedIndustryEpicID);
                 this.selectedIndustryEpicData = records[index];
-                console.log('Selected records from my Store', this.selectedIndustryEpicData);
                 this._loadEpicDetailsPanel();
                     
             }
@@ -242,7 +240,6 @@ Ext.define('CustomApp', {
             
             if(this.selectedIndustryEpicData){
                 //prepare display data for epic details panel.
-                console.log('selected epic data?', this.selectedIndustryEpicData);
                 var epicName = this.selectedIndustryEpicData.get('Name');
                 var ownerName = this.selectedIndustryEpicData.get('Owner') !== null ? 
                                 (this.selectedIndustryEpicData.get('Owner')['_refObjectName'] !== null? 
@@ -251,10 +248,13 @@ Ext.define('CustomApp', {
                 var refinedEstimate = this.selectedIndustryEpicData.get('RefinedEstimate');
                 var targetLaunch = this.selectedIndustryEpicData.get('c_TargetLaunch') !== null?this.selectedIndustryEpicData.get('c_TargetLaunch').toString() : 'No Target Specified';
                 
+                
                 //if the epic panel already exists update the item values.
                 if(this.epicDetailPanel)
                 {
+                    console.log('check for panel form?', this.epicDetailPanel.getForm().getFields());
                     console.log('update existing panel.');
+                    console.log('Details Panel?', this.epicDetailPanel);
                     this.epicDetailPanel.getForm().findField('name').setValue(epicName);
                     this.epicDetailPanel.getForm().findField('owner').setValue(ownerName);
                     this.epicDetailPanel.getForm().findField('refined_estimate').setValue(refinedEstimate);
