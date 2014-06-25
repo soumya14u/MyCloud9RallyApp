@@ -1,13 +1,4 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>HelloWorld</title>
-
-    <script type="text/javascript" src="/apps/2.0rc3/sdk.js"></script>
-
-    <script type="text/javascript">
-        Rally.onReady(function () {
-                Ext.define('CustomApp', {
+Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
     items:[
@@ -515,22 +506,3 @@
 
     }
 });
-
-            Rally.launchApp('CustomApp', {
-                name:"HelloWorld",
-	            parentRepos:""
-            });
-
-        });
-    </script>
-
-
-    <style type="text/css">
-        .app {
-  /* Add app styles here */
-}
-
-    </style>
-</head>
-<body></body>
-</html>

@@ -4,7 +4,7 @@
    "server": "https://rally1.rallydev.com",
    "sdk": "2.0rc3",
    "javascript": [
-      "SampleCombo.js"
+      "IndustryRollUpView.js"
    ],
    "css": [
       "app.css"
