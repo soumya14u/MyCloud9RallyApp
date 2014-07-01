@@ -15,10 +15,10 @@
         {
             xtype: 'container',
             itemId: 'top',
-            style:{ 
-                type: 'hbox',
-                align: 'fit',
-                padding: 10
+            layout: { 
+                    type: 'hbox',
+                    align: 'fit',
+                    padding: 10
                 }
         },
         {
@@ -46,13 +46,17 @@
         padding:10
     },
     
+    //TODO: Naming conventions of widget variables should incoporate the widget class.
+    //e.g. filterCheckBox.
+    //TODO: cleanup code.
+    
     //declaring all global variables.
-    industryEpicStore : undefined,          //stores all epics of Industry Solutions.
-    epicComboStore : undefined,             //store all data to be displayed in Epic Combo.
+    industrySolutionEpicStore : undefined,          //stores all epics of Industry Solutions.
+    comboBoxStore : undefined,             //store all data to be displayed in Epic Combo.
     selectedIndustryEpicID: undefined,      //contains selected Industry Epic ID
     selectedIndustryEpicData: undefined,    //contains selected Industry Epic data
-    epicCheckBoxChecked: false,             //captures the current check box checked value.
-    filteredEpicDataForCombo: undefined,    //contains all the filtered epics for combo.
+    checkBoxCheckedValue: false,             //captures the current check box checked value.
+    filteredDataForComboBox: undefined,    //contains all the filtered epics for combo.
     
     totalAcceptedLeafStoryCount: 0,
     totalLeafStoryCount: 0,
@@ -60,254 +64,241 @@
     
     launch: function() {
         
-        this.comboFilterContainer = Ext.create('Ext.container.Container',{
-            layout: {
-                type: 'hbox',
-                align: 'left',
-                padding: 5
-            }
-        });
-        
-        this.down('#top').add(this.comboFilterContainer);
-        
-         this.comboBoxContainer = Ext.create('Ext.container.Container',{
-            layout: {
-                type: 'hbox',
-                align: 'left',
-                padding: 5
-            }
-        });
-        this.comboFilterContainer.add(this.comboBoxContainer);
-        //this.topContainer.add(this.comboBoxContainer);
-        
-        this.filterContainer = Ext.create('Ext.container.Container',{
-            layout: {
-                type: 'hbox',
-                align: 'left',
-                padding: 5
-            }
-        });
-        this.comboFilterContainer.add(this.filterContainer);
-        //this.topContainer.add(this.filterContainer);
-        
-        this._loadEpicFilterControl();
         this._loadIndustryEpicDataStore();
     },
     
-    _loadEpicFilterControl: function(){
-        console.log('adding check box control.');
-        this.epicFilter = Ext.create( 'Ext.form.field.Checkbox', {
+     _loadIndustryEpicDataStore: function(){
+            
+        // If the store exists, just reload data
+        if(this.industrySolutionEpicStore){
+            this.industrySolutionEpicStore.load();
+        }
+        // else create the store
+        else{
+                this.industrySolutionEpicStore = Ext.create('Rally.data.wsapi.Store', {
+                model: 'PortfolioItem/Epic',
+                fetch: ['Name', 'State', 'FormattedID', 'Owner', 'Tags', 'RefinedEstimate', 'c_TargetLaunch'],
+                autoLoad: true,
+                context: {
+                    workspace: '/workspace/1089940415',
+                    project: '/project/11656855707',
+                    projectScopeUp: false,
+                    projectScopeDown: true
+                },
+                listeners: {
+                    load: function(industrySolutionEpicStore, data, success) {
+                         this._loadComboBox();
+                         this._loadEpicFilterContainer();
+                    },
+                    scope:this
+                },
+                sorters: [
+                            {
+                                property: 'FormattedID',
+                                direction: 'ASC'
+                            }
+                        ]
+            });
+        }
+        
+    },
+    
+    _loadComboBox: function(){
+        if(this.industrySolutionEpicStore)
+        {
+            //prepare the filtered Epic Data.
+            this._filterOutIndustrySolutionEpicStoreData();
+            
+            //get all the epic data for populating combobox.
+            this._createComboBoxStore();
+            
+            if(this.comboBoxStore)
+            {
+                //if the combo selectorexists. dispose it off.
+                if(!this.comboBox)
+                {
+                    //create the combo dropdown list control.
+                    this.comboBox = Ext.create('Ext.form.ComboBox',{
+                        fieldLabel:'Select Epics ',
+                        itemId:'industryEpicCombobox',
+                        store: this.comboBoxStore,
+                        queryMode: 'local',
+                        displayField: 'Name',
+                        valueField: 'ID',
+                        triggerAction: 'all',
+                        width: 600,
+                        padding: '0 10 0 0',
+                        listeners: {
+                            select: this._onComboBoxSelect,
+                            scope: this}
+                    });
+                    
+                    //add the combo box control to the app container.
+                    this.down('#top').add(this.comboBox);
+                }
+                else{
+                    
+                    //clearing all selection from combobox and rebinding the store.
+                     this.comboBox.clearValue();
+                     this.comboBox.bindStore(this.comboBoxStore);
+                     
+                     //cleaning up all components from middle container.
+                     if(this.down('#middle')){
+                         this.down('#middle').removeAll(true);
+                         if(this.summaryPanel)
+                            this.summaryPanel = null;
+                     }
+                     
+                     //cleaning up all components from bottom container.
+                     if(this.down('#bottom')){
+                         this.down('#bottom').removeAll(true);
+                         //marking the grid empty.
+                         if(this.rollupViewGrid)
+                            this.rollupViewGrid = null;
+                        //marking the panel empty.
+                         if(this.gridPanel)
+                            this.gridPanel = null;
+                     }
+                     
+                }
+            }
+        }
+    },
+    
+    _loadEpicFilterContainer: function(){
+        
+        if(!this.filterCheckBox){
+            this.filterCheckBox = Ext.create( 'Ext.form.field.Checkbox', {
                 renderTo: Ext.getBody(),
-                id: 'industryEpicFilterCheck',
+                id: 'filterCheckBox',
                 boxLabel: 'Exclude all "No Entry" or "Launched" Epics. ', 
                 name: 'epicFilterCheckBox', 
                 inputValue: 'PortfolioItems/Epic ', 
                 checked: false,
                 width: 250,
-                listerners:{
+                listeners:{
                     change: function(){
                         console.log('checkbox check change event is fired!');
-                    },
-                    click: function(){
-                        console.log('ckeckbox clicked event is fired.!');
+                        this.checkBoxCheckedValue = this.down('#filterCheckBox').getValue();
+                        console.log('The checked value is?', this.checkBoxCheckedValue);
                     },
                     scope: this
                 }
             });
             
-        this.epicFilterButton = Ext.create('Rally.ui.Button',{
-            text: 'Filter',
-            renderTo: Ext.getBody(),
-            handler: this._epicFilterButtonClicked,
-            scope: this
-        });
+            this.down('#top').add(this.filterCheckBox);
+        }
         
-        //add the check box control to the app container.
-        this.filterContainer.add(this.epicFilter);
-        this.filterContainer.add(this.epicFilterButton);
+        if(!this.filterButton){
+            this.filterButton = Ext.create('Rally.ui.Button',{
+                text: 'Filter',
+                renderTo: Ext.getBody(),
+                handler: this._filterButtonClicked,
+                scope: this
+            });
+            
+            this.down('#top').add(this.filterButton);
+        }
+        
     },
     
-    _epicFilterButtonClicked: function(){
+    _filterButtonClicked: function(){
         
         console.log('Filter Button is clicked!');
-        this.epicCheckBoxChecked = this.down('#industryEpicFilterCheck').getValue();
-        console.log('The checked value is?', this.epicCheckBoxChecked);
+        this.checkBoxCheckedValue = this.down('#filterCheckBox').getValue();
+        console.log('The checked value is?', this.checkBoxCheckedValue);
         this._loadIndustryEpicDataStore();
     },
     
-    _loadIndustryEpicDataStore: function(){
-            
-            // If the store exists, just reload data
-            if(this.industryEpicStore){
-                this.industryEpicStore.load();
-            }
-            // else create the store
-            else{
-                    this.industryEpicStore = Ext.create('Rally.data.wsapi.Store', {
-                    model: 'PortfolioItem/Epic',
-                    fetch: ['Name', 'State', 'FormattedID', 'Owner', 'Tags', 'RefinedEstimate', 'c_TargetLaunch'],
-                    autoLoad: true,
-                    context: {
-                        workspace: '/workspace/1089940415',
-                        project: '/project/11656855707',
-                        projectScopeUp: false,
-                        projectScopeDown: true
-                    },
-                    listeners: {
-                        load: function(myStore, data, success) {
-                             this._loadEpicComboBox();
-                        },
-                        scope:this
-                    },
-                    sorters: [
-                                {
-                                    property: 'FormattedID',
-                                    direction: 'ASC'
-                                }
-                            ]
-                });
-            }
-            
-        },
         
-        _loadEpicComboBox: function(){
-            if(this.industryEpicStore)
-            {
-                //prepare the filtered Epic Data.
-                this._createFilteredEpicData();
-                
-                //get all the epic data for populating combobox.
-                this._createAllEpicComboStore();
-                
-                if(this.epicComboStore)
+    _filterOutIndustrySolutionEpicStoreData: function(){
+        this.filteredDataForComboBox = [];
+        
+        if(this.checkBoxCheckedValue)
+        {
+            var epicDataCol = [];
+            //fetch the epic data for Combo list.
+            Ext.Array.each(this.industrySolutionEpicStore.getRecords(),function(thisIndustryEpic){
+                var epicState = thisIndustryEpic.get('State');
+                if(epicState!==null)
                 {
-                    if(this.epicDetailPanel)
-                    {
-                        this.selectedIndustryEpicID = 0;
-                        this.selectedIndustryEpicData = null;
-                        this._loadGridData();
-                    }
-                    
-                    //if the combo selectorexists. dispose it off.
-                    if(this.epicSelector)
-                        this.epicSelector.destroy();
-                        
-                    //create the combo dropdown list control.
-                    this.epicSelector = Ext.create('Ext.form.ComboBox',{
-                        fieldLabel:'Select Epics: ',
-                        itemId:'industryEpicCombobox',
-                        store: this.epicComboStore,
-                        queryMode: 'local',
-                        displayField: 'Name',
-                        valueField: 'ID',
-                        width: 600,
-                        listeners: {
-                            select: this._onEpicComboBoxSelect,
-                            ready: this._onEpicComboBoxLoad, //need to revisit why this is not firing
-                            scope: this}
-                    });
-                    
-                    //add the combo box control to the app container.
-                    this.comboBoxContainer.add(this.epicSelector);
+                    var epicStateName = epicState.Name;
+                    if(epicStateName!==null && epicStateName !== 'Launched')
+                        epicDataCol.push(thisIndustryEpic);
                 }
-            }
-        },
-        
-        _createFilteredEpicData: function(){
-            this.filteredEpicDataForCombo = [];
+            });
             
-            if(this.epicCheckBoxChecked)
-            {
-                var epicDataCol = [];
-                //fetch the epic data for Combo list.
-                Ext.Array.each(this.industryEpicStore.getRecords(),function(thisIndustryEpic){
-                    var epicState = thisIndustryEpic.get('State');
-                    if(epicState!==null)
-                    {
-                        var epicStateName = epicState.Name;
-                        if(epicStateName!==null && epicStateName !== 'Launched')
-                            epicDataCol.push(thisIndustryEpic);
-                    }
-                });
-                
-                this.filteredEpicDataForCombo = epicDataCol;
-            }
-            else
-                this.filteredEpicDataForCombo = this.industryEpicStore.getRecords();
-            
-        },
+            this.filteredDataForComboBox = epicDataCol;
+        }
+        else
+            this.filteredDataForComboBox = this.industrySolutionEpicStore.getRecords();
         
-        _onEpicFilterClick:function(){
-            console.log('checkbox event fired!!!');
-        },
+    },
+    
+    _onComboBoxSelect: function(){
         
-        _onEpicComboBoxLoad: function(){
-            console.log('On combo box load....');
-        },
+        //retrive all epic info for selected item.
+        this.selectedIndustryEpicID = this.down('#industryEpicCombobox').getValue();
+        console.log('Selected value?', this.selectedIndustryEpicID);
+        this._loadSelectedEpicDetailsFromStore();
+        this._loadGridStore();
+    },
+    
+    _loadSelectedEpicDetailsFromStore: function(){
         
-        _onEpicComboBoxSelect: function(){
-            
-            //retrive all epic info for selected item.
-            this.selectedIndustryEpicID = this.down('#industryEpicCombobox').getValue();
-            console.log('Selected value?', this.selectedIndustryEpicID);
-            this._loadSelectedEpicDetailsFromStore();
-            this._loadGridData();
-        },
+        if(this.industrySolutionEpicStore && this.selectedIndustryEpicID){
+            var records = this.industrySolutionEpicStore.getRecords();
+            var index = this.industrySolutionEpicStore.find('FormattedID', this.selectedIndustryEpicID);
+            this.selectedIndustryEpicData = records[index];
+        }
+    },
         
-        _loadSelectedEpicDetailsFromStore: function(){
-            
-            if(this.industryEpicStore && this.selectedIndustryEpicID){
-                var records = this.industryEpicStore.getRecords();
-                var index = this.industryEpicStore.find('FormattedID', this.selectedIndustryEpicID);
-                this.selectedIndustryEpicData = records[index];
-            }
-        },
+    _createComboBoxStore: function(){
         
-        _createAllEpicComboStore: function(){
-            
-            if(this.filteredEpicDataForCombo)
-            {
-                //define the custom model for combo box data.
-                Ext.define('Epic', {
-                            extend: 'Ext.data.Model',
-                            fields: [
-                                {name: 'ID',  type: 'string'},
-                                {name: 'Name', type: 'string'}
-                            ]
-                        });
-                
-                //fetch the epic data for Combo list.
-                var epicDataCol = [];
-                        
-                Ext.Array.each(this.filteredEpicDataForCombo,function(thisIndustryEpic){
-                    var epicName = thisIndustryEpic.get('Name');
-                    var epicId = thisIndustryEpic.get('FormattedID');
-                    var epicComboName = epicId + ': ' + epicName;
-                    //console.log('Industry Epic = ', epicComboName);
-                    
-                    var epicData = Ext.create('Epic',{
-                        ID: epicId,
-                        Name: epicComboName
+        if(this.filteredDataForComboBox)
+        {
+            //define the custom model for combo box data.
+            Ext.define('Epic', {
+                        extend: 'Ext.data.Model',
+                        fields: [
+                            {name: 'ID',  type: 'string'},
+                            {name: 'Name', type: 'string'}
+                        ]
                     });
+            
+            //fetch the epic data for Combo list.
+            var epicDataCol = [];
                     
-                    epicDataCol.push(epicData);
+            Ext.Array.each(this.filteredDataForComboBox,function(thisIndustryEpic){
+                var epicName = thisIndustryEpic.get('Name');
+                var epicId = thisIndustryEpic.get('FormattedID');
+                var epicComboName = epicId + ': ' + epicName;
+                
+                var epicData = Ext.create('Epic',{
+                    ID: epicId,
+                    Name: epicComboName
                 });
                 
-                //create the store for the combo list.            
-                this.epicComboStore = Ext.create('Ext.data.Store',{
-                    model: 'Epic',
-                    data: epicDataCol,
-                    autoLoad: true,
-                    listeners: {
-                        scope:this
-                    }
-                });
-            }
-        },
+                epicDataCol.push(epicData);
+            });
+            
+            //create the store for the combo list.            
+            this.comboBoxStore = Ext.create('Ext.data.Store',{
+                model: 'Epic',
+                data: epicDataCol,
+                autoLoad: true,
+                listeners: {
+                    scope:this
+                }
+            });
+        }
+    },
         
     _createGrid: function(){
-        this.myGrid = Ext.create('Rally.ui.grid.Grid', {
-                    store:this.myStore,
+        //TODO: investigate how to render a grid inside a container.
+        
+        this.rollupViewGrid = Ext.create('Rally.ui.grid.Grid', {
+                    store:this.gridStore,
                     columnCfgs: [
                         'FormattedID',
                          'Name',
@@ -323,7 +314,7 @@
                      ]
                     });
  
-        this.panelGrid=Ext.create('Ext.form.Panel', {
+        this.gridPanel=Ext.create('Ext.form.Panel', {
                         renderTo: Ext.getBody(),
                         layout: {
                             type: 'vbox',
@@ -331,14 +322,14 @@
                             padding: 10
                         },
                         
-                        items: [this.myGrid]
+                        items: [this.rollupViewGrid]
                        
                     });
-        this.down('#bottom').add(this.panelGrid);
+        this.down('#bottom').add(this.gridPanel);
     },
    
 
-    _loadGridData: function(){
+    _loadGridStore: function(){
         
         console.log('loading grid');
         // If the store exists, just reload data
@@ -347,15 +338,14 @@
                 value: this.selectedIndustryEpicID
             };
         
-        if(this.myStore){
-            console.log('myStore exists');
-            this.myStore.setFilter(thisFilter);
-            this.myStore.load();
+        if(this.gridStore){
+            this.gridStore.setFilter(thisFilter);
+            this.gridStore.load();
         }
         // else create the store
         else{
         
-                this.myStore = Ext.create('Rally.data.wsapi.Store', {
+                this.gridStore = Ext.create('Rally.data.wsapi.Store', {
                 model: 'PortfolioItem',
                 fetch: ['Name', 'Project','State', 'FormattedID', 'Owner','Parent', 'Estimate','Tags','PlannedStartDate','PlannedEndDate','PercentDoneByStoryCount'],
                 autoLoad: true,
@@ -369,9 +359,9 @@
                     thisFilter
                     ],
                 listeners: {
-                    load: function(myStore, data, success) {
-                        this._loadEpicConsolidatePanel();
-                        if (!this.myGrid) {
+                    load: function(gridStore, data, success) {
+                        this._loadSummaryPanel();
+                        if (!this.rollupViewGrid) {
                             this._createGrid();
                         }
                     },
@@ -383,20 +373,20 @@
            
     },
     
-    _loadEpicConsolidatePanel: function(){
+    _loadSummaryPanel: function(){
         
         this._loadAllEpicDetailsData();
         this._loadEpicPercentageDoneData();
         
-        if(this.epicDetailPanel)
+        if(this.summaryPanel)
         {
-            this.epicDetailPanel.removeAll(true);
-            this.epicDetailPanel.add(this.leftContainer, this.rightContainer);
+            this.summaryPanel.removeAll(true);
+            this.summaryPanel.add(this.leftContainer, this.rightContainer);
         }
         else{
-             this.epicDetailPanel = Ext.create('Ext.form.Panel', {
+             this.summaryPanel = Ext.create('Ext.form.Panel', {
                     renderTo: Ext.getBody(),
-                    width: 700,
+                    width: 800,
                     height: 175,
                     layout: {
                         type: 'hbox',
@@ -408,20 +398,20 @@
                 });
                 
              //add the panel to the container.
-             this.down('#middle').add(this.epicDetailPanel);
-             //this.middleContainer.add(this.epicDetailPanel);
+             this.down('#middle').add(this.summaryPanel);
         }
        
     },
     
     _loadAllEpicDetailsData: function(){
-        
+      
         this.leftContainer = Ext.create('Ext.container.Container',{
             layout: {
                 type: 'vbox',
                 align: 'left',
                 padding: 10
-            }
+            },
+            width: 500
         });
         
         var epicName = '';
@@ -465,8 +455,7 @@
                                 name: 'target_launch',
                                 value: targetLaunch
                             }];
-                this.leftContainer.add(leftItems);
-        
+        this.leftContainer.add(leftItems);
     },
     
     _loadEpicPercentageDoneData: function(){
@@ -476,10 +465,11 @@
                 type: 'hbox',
                 align: 'left',
                 padding: 10
-            }
+            },
+            width: 300
         });
         
-        if(this.myStore){
+        if(this.gridStore){
         
             this._calculateConsolidatedPercentDoneByStoryCount();
             var rightItems = [
@@ -501,7 +491,7 @@
      _calculateConsolidatedPercentDoneByStoryCount:function(){
         // Calculate the consolidated % done by story count
         var records = []; 
-        records = this.myStore.getRecords();
+        records = this.gridStore.getRecords();
         this.totalAcceptedLeafStoryCount = 0;
         this.totalLeafStoryCount = 0;
         Ext.Array.each(records, function(thisRecord) {
