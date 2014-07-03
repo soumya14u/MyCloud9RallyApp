@@ -46,7 +46,7 @@ Ext.define('CustomApp', {
     comboBoxStore : undefined,             //store all data to be displayed in Epic Combo.
     selectedIndustryEpicID: undefined,      //contains selected Industry Epic ID
     selectedIndustryEpicData: undefined,    //contains selected Industry Epic data
-    checkBoxCheckedValue: false,             //captures the current check box checked value.
+    checkBoxCheckedValue: true,             //captures the current check box checked value.
     filteredDataForComboBox: undefined,    //contains all the filtered epics for combo.
     
     totalAcceptedLeafStoryCount: 0,
@@ -68,7 +68,7 @@ Ext.define('CustomApp', {
         else{
                 this.industrySolutionEpicStore = Ext.create('Rally.data.wsapi.Store', {
                 model: 'PortfolioItem/Epic',
-                fetch: ['Name', 'State', 'FormattedID', 'Owner', 'Tags', 'RefinedEstimate', 'c_TargetLaunch'],
+                fetch: ['Name', 'State', 'FormattedID', 'Owner', 'Tags', 'PreliminaryEstimate', 'c_TargetLaunch'],
                 autoLoad: true,
                 context: {
                     workspace: '/workspace/1089940415',
@@ -165,7 +165,7 @@ Ext.define('CustomApp', {
                 boxLabel: 'Exclude all "No Entry" or "Launched" Epics. ', 
                 name: 'epicFilterCheckBox', 
                 inputValue: 'PortfolioItems/Epic ', 
-                checked: false,
+                checked: true,
                 width: 250,
                 listeners:{
                     change: function(){
@@ -298,10 +298,8 @@ Ext.define('CustomApp', {
                          'Project',
                          'PlannedStartDate',
                          'PlannedEndDate',
-                         'RefinedEstimate',
-                         'State',
-                         'Tags'
-                         
+                         'PreliminaryEstimate',
+                         'State'
                      ]
                     });
  
@@ -338,7 +336,7 @@ Ext.define('CustomApp', {
         
                 this.gridStore = Ext.create('Rally.data.wsapi.Store', {
                 model: 'PortfolioItem',
-                fetch: ['Name', 'Project','State', 'FormattedID', 'Owner','Parent', 'Estimate','Tags','PlannedStartDate','PlannedEndDate','PercentDoneByStoryCount'],
+                fetch: ['Name', 'Project','State', 'FormattedID', 'Owner','Parent', 'PreliminaryEstimate','Tags','PlannedStartDate','PlannedEndDate','PercentDoneByStoryCount'],
                 autoLoad: true,
                 context: {
                    workspace: '/workspace/1089940415',
@@ -407,7 +405,6 @@ Ext.define('CustomApp', {
         
         var epicName = '';
         var ownerName = '';
-        var refinedEstimate='';
         var targetLaunch ='';
         
        if(this.selectedIndustryEpicData){
@@ -417,7 +414,6 @@ Ext.define('CustomApp', {
                                 (this.selectedIndustryEpicData.get('Owner')._refObjectName !== null? 
                                     this.selectedIndustryEpicData.get('Owner')._refObjectName : 'No Owner') 
                                 : 'No Owner';
-                refinedEstimate = this.selectedIndustryEpicData.get('RefinedEstimate');
                 targetLaunch = this.selectedIndustryEpicData.get('c_TargetLaunch') !== null?this.selectedIndustryEpicData.get('c_TargetLaunch').toString() : 'No Target Specified';
        }
        
@@ -436,12 +432,6 @@ Ext.define('CustomApp', {
                             }, 
                             {
                                 xtype: 'displayfield',
-                                fieldLabel: 'Refined Estimate',
-                                name: 'refined_estimate',
-                                value: refinedEstimate
-                            }, 
-                            {
-                                xtype: 'displayfield',
                                 fieldLabel: 'Target Launch',
                                 name: 'target_launch',
                                 value: targetLaunch
@@ -453,17 +443,28 @@ Ext.define('CustomApp', {
         
          this.rightContainer = Ext.create('Ext.container.Container',{
             layout: {
-                type: 'hbox',
+                type: 'vbox',
                 align: 'left',
                 padding: 10
             },
             width: 300
         });
         
-        if(this.gridStore){
+        this.progressBarContainer = Ext.create('Ext.container.Container',{
+            layout: {
+                type: 'hbox',
+                align: 'left',
+                padding: 0
+            },
+            width: 300
+        });
         
+        this.rightContainer.add(this.progressBarContainer);
+        
+        if(this.gridStore){
+            
             this._calculateConsolidatedPercentDoneByStoryCount();
-            var rightItems = [
+            var progressBarItems = [
                                 {
                                     xtype: 'displayfield',
                                     fieldLabel: 'Consolidated Percentage Done',
@@ -475,6 +476,22 @@ Ext.define('CustomApp', {
                                     percentDone: this.consolidatedPercentDoneByStoryCount,
                                     width: 150
                                 }];
+            this.progressBarContainer.add(progressBarItems);
+        }
+        
+        if(this.selectedIndustryEpicData){
+            
+            var preliminaryEstimate='';
+            preliminaryEstimate = this.selectedIndustryEpicData.get('PreliminaryEstimate');
+            
+            var rightItems = [
+                {
+                    xtype: 'displayfield',
+                    fieldLabel: 'Preliminary Estimate',
+                    name: 'preliminary_estimate',
+                    value: preliminaryEstimate
+                }];
+            
             this.rightContainer.add(rightItems);
         }
     },
