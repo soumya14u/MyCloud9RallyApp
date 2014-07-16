@@ -211,10 +211,9 @@ Ext.define('CustomApp', {
             //fetch the epic data for Combo list.
             Ext.Array.each(this.industrySolutionEpicStore.getRecords(),function(thisIndustryEpic){
                 var epicState = thisIndustryEpic.get('State');
-                if(epicState!==null)
-                {
+                if(epicState!==null){
                     var epicStateName = epicState.Name;
-                    if(epicStateName!==null && epicStateName !== 'Launched')
+                    if(epicStateName!==null && epicStateName !== 'Launched' && epicStateName !== 'Assessment' && epicStateName !== 'On Ramp' && epicStateName !== 'Break it Down')
                         epicDataCol.push(thisIndustryEpic);
                 }
             });
