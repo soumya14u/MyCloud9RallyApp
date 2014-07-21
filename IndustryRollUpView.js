@@ -162,11 +162,11 @@ Ext.define('CustomApp', {
             this.filterCheckBox = Ext.create( 'Ext.form.field.Checkbox', {
                 renderTo: Ext.getBody(),
                 id: 'filterCheckBox',
-                boxLabel: 'Exclude all "No Entry" or "Launched" Epics. ', 
+                boxLabel: 'Exclude all "No Entry", "Launched", "Assessment", "On Ramp" or "Break it down" Epics. ', 
                 name: 'epicFilterCheckBox', 
                 inputValue: 'PortfolioItems/Epic ', 
                 checked: true,
-                width: 250,
+                width: 500,
                 listeners:{
                     change: function(){
                         console.log('checkbox check change event is fired!');

@@ -13,6 +13,15 @@ Ext.define('Rally.ui.tree.PortfolioForecastTreeItem', {
             '<div class="textContent {[this.getClass()]}">',
                 '{[this.getSummary()]}',
             '</div>',
+            '<div class="textContent">',
+                '{[this.getTargetLaunch()]}',
+            '</div>',
+            '<div class="textContent">',
+                '{[this.getPlannedStartDate()]}',
+            '</div>',
+            '<div class="textContent">',
+                '{[this.getPlannedEndDate()]}',
+            '</div>',
             '<div class="rightSide">',
                 '{[this.getPercentDone()]}',
             '</div>',
@@ -20,6 +29,18 @@ Ext.define('Rally.ui.tree.PortfolioForecastTreeItem', {
                 getPercentDone: function() {
                     var record = me.getRecord();
                     return record.getField('PercentDoneByStoryCount') ? Rally.ui.renderer.RendererFactory.renderRecordField(me.getRecord(), 'PercentDoneByStoryCount') : '';
+                },
+                getTargetLaunch: function() {
+                    var record = me.getRecord();
+                    return record.data.c_TargetLaunch? record.getField('c_TargetLaunch').displayName +": " + Rally.ui.renderer.RendererFactory.renderRecordField(me.getRecord(), 'c_TargetLaunch') : '';
+                },
+                getPlannedStartDate: function() {
+                    var record = me.getRecord();
+                    return record.data.PlannedStartDate? record.getField('PlannedStartDate').displayName +": " + Rally.ui.renderer.RendererFactory.renderRecordField(me.getRecord(), 'PlannedStartDate') : '';
+                },
+                getPlannedEndDate: function() {
+                    var record = me.getRecord();
+                    return record.data.PlannedEndDate? record.getField('PlannedEndDate').displayName +": " + Rally.ui.renderer.RendererFactory.renderRecordField(me.getRecord(), 'PlannedEndDate') : '';
                 },
                 getFormattedId: function() {
                     var record = me.getRecord();
@@ -36,11 +57,18 @@ Ext.define('Rally.ui.tree.PortfolioForecastTreeItem', {
                     var record = me.getRecord();
                     var daysToCompletion = record.data.DaysToCompletion;
                     var workdaysRemaining = record.data.WorkdaysRemaining;
+                    var out = '';
+                    
                     if (daysToCompletion !== null && workdaysRemaining !== null) {
-                        return '(' + daysToCompletion.toFixed(1) + ' days needed / ' + workdaysRemaining + ' days left)';
-                    } else {
-                        return '';
+                        out = '(' + daysToCompletion.toFixed(1) + ' days for Stories needed / ' + workdaysRemaining + ' days left)';
+                    } 
+                    
+                    if (typeof record.data.HistoricalThroughput !== 'undefined') {
+                        out+='</div><div class="textContent">Throughput: ' + Math.round(record.data.HistoricalThroughput * 30) + ' Stories / month</div>';
                     }
+                    
+                    return out;
+            
                 }
             }
         );
@@ -62,6 +90,9 @@ Ext.define('Rally.ui.tree.PortfolioForecastTree', {
             this.computePortfolioItemRisk(store);
             this.superclass.handleParentItemStoreLoad.apply(this, originalArguments);
         }, this));
+    },
+    childItemsStoreConfigForParentRecordFn: function(){
+        return {fetch: true};
     },
 
     handleChildItemStoreLoad: function(store, records, parentTreeItem) {
@@ -115,6 +146,7 @@ Ext.define('Rally.ui.tree.PortfolioForecastTree', {
             _.each(portfolioItem.data.Projects, function(project, projectOid) {
                 project.WorkdaysRemaining = workdaysRemaining;
                 project.DaysToCompletion = project.StoriesRemaining * historicalThroughput[projectOid];
+                project.HistoricalThroughput = historicalThroughput[projectOid];
                 project.AtRisk = project.DaysToCompletion > workdaysRemaining;
             });
 
@@ -165,7 +197,6 @@ Ext.define('Rally.ui.tree.PortfolioForecastTree', {
 
         parentTreeItem.store = childStore;
     },
-
     loadStoriesRemainingByFeatureAndProject: function(callback) {
         Ext.create('Rally.data.lookback.SnapshotStore', {
             // TODO - account for > 20k results
@@ -211,102 +242,121 @@ Ext.define('Rally.ui.tree.PortfolioForecastTree', {
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
-
     launch: function() {
+        var me = this;
+        this.lastHistoricalTPStart = false;
+        this.lastHistoricalTPEnd = false;
         this.add({
-            xtype: 'fieldset',
-            title: 'Portfolio items starting and ending between',
+            xtype: 'form',
+            title: 'Configuration',
+            frame: true,
+            collapsible: true,
+            collapsed: false,
+            bodyStyle: 'padding:5px 5px 0',
+            layout: 'column',
             items: [
                 {
-                    xtype: 'fieldcontainer',
+                    xtype: 'fieldset',
                     fieldLabel: 'Type',
+                    cls: 'confFieldset',
                     items: [{
                         xtype: 'rallyportfolioitemtypecombobox',
                         id: 'portfolioItemType',
                         itemId: 'portfolioItemType',
-                        hideLabel: true,
-                        listeners: {
-                            change: Ext.bind(this.loadPortfolioItems, this)
-                        }
+                        hideLabel: true
                     }]
+                },
+                {
+                    xtype: 'fieldset',
+                    title: 'Select Planned Start and End Dates',
+                    id: 'fldPlannedDates',
+                    itemId: 'fldPlannedDates',
+                    cls: 'confFieldset',
+                    checkboxToggle: true,
+                    columnWidth: 0.2,
+                    items: [
+                        {
+                            xtype: 'datefield',
+                            id: 'portfolioItemsStart',
+                            itemId: 'portfolioItemsStart',
+                            fieldLabel: 'Start',
+                            cls: 'left',
+                            value: (new Lumenize.Time(NOW)).add(-3, Lumenize.Time.MONTH).getJSDate('UTC') // 3 months ago
+                        },
+                        {
+                            xtype: 'datefield',
+                            id: 'portfolioItemsEnd',
+                            itemId: 'portfolioItemsEnd',
+                            fieldLabel: 'End',
+                            value: (new Lumenize.Time(NOW)).add(3, Lumenize.Time.MONTH).getJSDate('UTC') // 3 months from now
+                        }
+                    ]
+                },
+                {
+                    xtype: 'fieldset',
+                    title: 'Tags',
+                    cls: 'confFieldset',
+                    columnWidth: 0.2,
+                    items: [
+                        {
+                            xtype: 'rallytagpicker',
+                            id: 'tagpicker',
+                            itemId: 'tagpicker',
+                            storeConfig: {autoLoad: true}
+                        }
+                    ]
+                },
+                {
+                    xtype: 'fieldset',
+                    title: 'Target Launch',
+                    cls: 'confFieldset',
+                    columnWidth: 0.2,
+                    items: [
+                        {
+                            xtype: 'rallyfieldvaluecombobox',
+                            id: 'portfolioItemsTargetLaunch',
+                            itemId: 'portfolioItemsTargetLaunch',
+                            model: 'PortfolioItem',
+                            field: 'c_TargetLaunch',
+                            fieldLabel: 'Target Launch'
+                        }
+                    ]
+                },
+                {
+                    xtype: 'fieldset',
+                    title: 'Sample historical throughput between',
+                    columnWidth: 0.2,
+                    cls: 'confFieldset',
+                    items: [
+                        {
+                            xtype: 'datefield',
+                            id: 'historicalThroughputStart',
+                            itemId: 'historicalThroughputStart',
+                            fieldLabel: 'Start',
+                            maxValue: NOW,
+                            value: (new Lumenize.Time(NOW)).add(-3, Lumenize.Time.MONTH).getJSDate('UTC')
+                        },
+                        {
+                            xtype: 'datefield',
+                            id: 'historicalThroughputEnd',
+                            itemId: 'historicalThroughputEnd',
+                            fieldLabel: 'End',
+                            maxValue: NOW,
+                            value: NOW
+                        }
+                    ]
+                },
+                 {
+                    xtype: 'rallybutton',
+                    text: 'Submit',
+                    handler: function() {
+                        me.loadThroughputByProjectAndPortfolioItems();
+                    }
                 }
             ]
         });
-
-        this.add({
-            xtype: 'fieldset',
-            title: 'Portfolio items with Target Launch dates',
-            items: [
-                {
-                    xtype: 'datefield',
-                    id: 'portfolioItemsStart',
-                    itemId: 'portfolioItemsStart',
-                    fieldLabel: 'Start',
-                    cls: 'left',
-                    value: (new Lumenize.Time(NOW)).add(-3, Lumenize.Time.MONTH).getJSDate('UTC'), // 3 months ago
-                    listeners: {
-                        change: Ext.bind(this.loadPortfolioItems, this)
-                    }
-                },
-                {
-                    xtype: 'datefield',
-                    id: 'portfolioItemsEnd',
-                    itemId: 'portfolioItemsEnd',
-                    fieldLabel: 'End',
-                    value: (new Lumenize.Time(NOW)).add(3, Lumenize.Time.MONTH).getJSDate('UTC'), // 3 months from now
-                    listeners: {
-                        change: Ext.bind(this.loadPortfolioItems, this)
-                    }
-                },
-                {
-                    xtype: 'box',
-                    border: false,
-                    html: '<br/><strong>OR</strong><br/><br/>'
-                },
-                {
-                    xtype: 'rallyfieldvaluecombobox',
-                    id: 'portfolioItemsTargetLaunch',
-                    itemId: 'portfolioItemsTargetLaunch',
-                    model: 'PortfolioItem',
-                    field: 'c_TargetLaunch',
-                    fieldLabel: 'Target Launch',
-                    listeners: {
-                        change: Ext.bind(this.loadPortfolioItems, this)
-                    }
-                }
-            ]
-        });
-        
-        this.add({
-            xtype: 'fieldset',
-            title: 'Sample historical throughput between',
-            items: [
-                {
-                    xtype: 'datefield',
-                    id: 'historicalThroughputStart',
-                    itemId: 'historicalThroughputStart',
-                    fieldLabel: 'Start',
-                    maxValue: NOW,
-                    value: (new Lumenize.Time(NOW)).add(-3, Lumenize.Time.MONTH).getJSDate('UTC'),
-                    listeners: {
-                        change: Ext.bind(this.loadThroughputByProjectAndPortfolioItems, this)
-                    }
-                },
-                {
-                    xtype: 'datefield',
-                    id: 'historicalThroughputEnd',
-                    itemId: 'historicalThroughputEnd',
-                    fieldLabel: 'End',
-                    maxValue: NOW,
-                    value: NOW,
-                    listeners: {
-                        change: Ext.bind(this.loadThroughputByProjectAndPortfolioItems, this)
-                    }
-                }
-            ]
-        });
-
-        this.loadThroughputByProjectAndPortfolioItems();
+      
+        //this.loadThroughputByProjectAndPortfolioItems();
     },
     
     getSnapshots: function(config) {
@@ -327,7 +377,21 @@ Ext.define('CustomApp', {
 
         return deferred.getPromise();
     },
+    getWorkingDays: function(startDate, endDate){
+         var result = 0;
     
+        var currentDate = startDate;
+        while (currentDate <= endDate)  {  
+    
+            var weekDay = currentDate.getDay();
+            if (weekDay !== 0 && weekDay != 6)
+                result++;
+    
+             currentDate.setDate(currentDate.getDate()+1); 
+        }
+    
+        return result;
+    },
     throughputByProject: function() {
         var start = Ext.Date.format(Ext.getCmp('historicalThroughputStart').getValue(), "Y-m-d");
         var end = Ext.Date.format(Ext.getCmp('historicalThroughputEnd').getValue(), "Y-m-d");
@@ -376,7 +440,7 @@ Ext.define('CustomApp', {
                 }
             }
         });
-
+        var me = this;
         //Group into lookup table by project oid
         return Deft.Promise.all([ forwardThroughput, backwardThroughput ]).then(function(results) {
             var forward = results[0];
@@ -385,6 +449,8 @@ Ext.define('CustomApp', {
             
             // Add forward throughput
             _.each(forward, function(snapshot) {
+                debugger;
+                console.log(me.getWorkingDays(snapshot._ValidFrom, snapshot._ValidTo));
                 _.each(snapshot._ProjectHierarchy, function(projectOid) {
                     throughput[projectOid] = throughput[projectOid] || 0;
                     throughput[projectOid]++;
@@ -407,29 +473,30 @@ Ext.define('CustomApp', {
     },
 
     loadThroughputByProjectAndPortfolioItems: function() {
-        this.historicalThroughputByProject = this.throughputByProject();
+        Ext.getBody().mask('Report creation in progress...');
+         
+        var start = Ext.getCmp('historicalThroughputStart').getRawValue();
+        var end = Ext.getCmp('historicalThroughputEnd').getRawValue();
+        
+        //cache Throughputs
+        if (start !== this.lastHistoricalTPStart || end !== this.lastHistoricalTPEnd) {
+            this.historicalThroughputByProject = this.throughputByProject();        
+            this.lastHistoricalTPStart = start;
+            this.lastHistoricalTPEnd = end;
+        }
+        
         this.loadPortfolioItems();
     },
 
-    loadPortfolioItems: function(caller) {
-        Ext.getBody().mask('Report creation in progress...');
-        
-        var portfolioItemsStart = Ext.Date.format(Ext.getCmp('portfolioItemsStart').getValue(), "Y-m-d");
-        var portfolioItemsEnd = Ext.Date.format(Ext.getCmp('portfolioItemsEnd').getValue(), "Y-m-d");
+    loadPortfolioItems: function() {
         var portfolioItemType = Ext.getCmp('portfolioItemType').getRawValue();
-        var targetLaunch = '';
         
-        if (typeof caller !== "undefined" && caller.getId() === 'portfolioItemsTargetLaunch') {
-            targetLaunch = Ext.getCmp('portfolioItemsTargetLaunch').getValue();
-        }
-        
-        var filter = this.getPortfolioTreeFilter(portfolioItemsStart, portfolioItemsEnd, targetLaunch);
-        
-        console.log(filter);
-
         if (!portfolioItemType) {
+            Ext.getBody().unmask();
             return;
         }
+        
+        var filter = this.getPortfolioTreeFilter();
 
         this.historicalThroughputByProject.then(Ext.bind(function(historicalThroughputByProject) {
             if (this.portfolioTree) {
@@ -440,11 +507,13 @@ Ext.define('CustomApp', {
                 xtype: 'portfolioforecasttree',
                 id: 'portfoliotree',
                 itemId: 'portfoliotree',
+                cls: 'portfolioTree',
                 enableDragAndDrop: false,
                 historicalThroughputByProject: historicalThroughputByProject,
                 topLevelModel: 'portfolioitem/' + portfolioItemType.toLowerCase(),
                 topLevelStoreConfig: {
-                    filters: filter
+                    filters: filter,
+                    fetch: true
                 },
                 listeners: {
                     initialload: function(){Ext.getBody().unmask();}
@@ -452,18 +521,27 @@ Ext.define('CustomApp', {
             });
         }, this));
     },
-    getPortfolioTreeFilter: function(portfolioItemsStart, portfolioItemsEnd, targetLaunch) {
+   getPortfolioTreeFilter: function() {
+        var portfolioItemsStart = Ext.Date.format(Ext.getCmp('portfolioItemsStart').getValue(), "Y-m-d");
+        var portfolioItemsEnd = Ext.Date.format(Ext.getCmp('portfolioItemsEnd').getValue(), "Y-m-d");
+        var targetLaunch = Ext.getCmp('portfolioItemsTargetLaunch').getValue();
+
         var filter = [ {
-                    property: 'LeafStoryCount', //Only show PIs that have user stories
-                    operator: '>',
-                    value: 0
-                }, {
-                    property: 'PercentDoneByStoryCount', //Do not show completed PIs
-                    operator: '<',
-                    value: 1
-                }];
-                
-        if (targetLaunch === '') {
+            property: 'LeafStoryCount', //Only show PIs that have user stories
+            operator: '>',
+            value: 0
+        }, {
+            property: 'PercentDoneByStoryCount', //Do not show completed PIs
+            operator: '<',
+            value: 1
+        }];
+        
+        //Add Tags
+        _.map(Ext.getCmp('tagpicker')._getRecordValue(), function(tag){
+            filter.push({property: 'Tags.Name', operator: '=', value: tag.data.Name});
+        });
+        
+        if (Ext.getCmp('fldPlannedDates').checkboxCmp.getValue() === true) { //use Planned start Dates
             filter.push(
                 {
                     property: 'PlannedStartDate',
@@ -473,21 +551,20 @@ Ext.define('CustomApp', {
                 {
                     property: 'PlannedEndDate',
                     operator: '<',
-                    value: portfolioItemsStart
+                    value: portfolioItemsEnd
                 }
             );
-            
         }
-        else {
+        
+        if (targetLaunch) {
             filter.push(
                 {
                     property: 'c_TargetLaunch',
-                    operator: '>',
+                    operator: '=',
                     value: targetLaunch
                 }
             );
         }
         return filter;
-        
     }
 });
